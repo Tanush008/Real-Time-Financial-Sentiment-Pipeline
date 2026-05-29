@@ -12,3 +12,5 @@ flask
 joblib
 FastAPI
 uvicorn
+tensorflow
+keras
