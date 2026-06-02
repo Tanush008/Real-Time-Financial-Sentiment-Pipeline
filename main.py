@@ -1,37 +1,71 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import joblib
-import re
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
+from svm_api import (
+    router as svm_router,
+    preprocess_text as svm_preprocess_text,
+    model as svm_model,
+    tfidf as svm_tfidf,
+)
+from bilstm_api import (
+    router as bilstm_router,
+    preprocess_text as bilstm_preprocess_text,
+    model as bilstm_model,
+    tokenizer,
+    label_encoder,
+    MAX_LENGTH,
+)
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import numpy as np
+
+
 app = FastAPI()
 
-model = joblib.load('svm_model.pkl')
-tfidf = joblib.load('tfidf_vectorizer.pkl')
-
-
-stop_words = set(stopwords.words('english'))
-lemmatizer = WordNetLemmatizer()
+app.include_router(svm_router)      # mounts /predict/svm
+app.include_router(bilstm_router)   # mounts /predict/bilstm
 
 
 class News(BaseModel):
     news: str
 
 
-def preprocess_text(text):
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    text = text.lower()
-    words = text.split()
-    words = [lemmatizer.lemmatize(word)
-             for word in words if word not in stop_words]
-    return ' '.join(words)
+@app.post("/predict/compare")
+def compare_predictions(data: News):
+    svm_cleaned = svm_preprocess_text(data.news)
+    svm_vector = svm_tfidf.transform([svm_cleaned])
+    svm_prediction = svm_model.predict(svm_vector)
+
+    svm_label_map = {0: "Negative", 1: "Neutral", 2: "Positive"}
+    svm_result = {
+        "sentiment": svm_label_map[svm_prediction[0]],
+    }
+
+    bilstm_cleaned = bilstm_preprocess_text(data.news)
+    bilstm_sequence = tokenizer.texts_to_sequences([bilstm_cleaned])
+    bilstm_padded = pad_sequences(
+        bilstm_sequence,
+        maxlen=MAX_LENGTH,
+        padding="post",
+        truncating="post",
+    )
+    bilstm_probs = bilstm_model.predict(bilstm_padded, verbose=0)
+    bilstm_label_idx = int(np.argmax(bilstm_probs, axis=1)[0])
+    bilstm_label = label_encoder.inverse_transform([bilstm_label_idx])[0]
+
+    bilstm_result = {
+        "sentiment": bilstm_label,
+        "confidence": float(np.max(bilstm_probs)),
+    }
+
+    return {
+        "svm": svm_result,
+        "bilstm": bilstm_result,
+    }
 
 
-@app.post("/predict")
-def predict_sentiment(data: News):
-    cleaned_text = preprocess_text(data.news)
-    text_tfidf = tfidf.transform([cleaned_text])
-    prediction = model.predict(text_tfidf)
-    label_map = {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
-    return {"sentiment": label_map[prediction[0]]}
-
+@app.get("/")
+def health():
+    return {"status": "ok", "endpoints": [
+        "/predict/svm",
+        "/predict/bilstm",
+        "/predict/compare"
+    ]}

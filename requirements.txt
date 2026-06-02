@@ -14,3 +14,4 @@ FastAPI
 uvicorn
 tensorflow
 keras
+pydantic

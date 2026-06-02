@@ -34,4 +34,12 @@ htmlcov/
 *.sqlite3
 *.pkl
 *.pickle
+*.joblib
+*.h5
+*.keras
 artifacts/
+models/*.pkl
+models/*.h5
+models/*.joblib
+models/*.keras
+dataset/*
