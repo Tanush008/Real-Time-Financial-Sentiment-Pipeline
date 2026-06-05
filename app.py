@@ -68,7 +68,7 @@ if st.button("Predict Sentiment"):
                         elif sentiment.lower() == "negative":
                             st.error(f"{model_name}: 📉 {sentiment}")
                         else:
-                            st.info(f"{model_name}: 😐 {sentiment}")
+                            st.info(f"{model_name}:  {sentiment}")
 
                         if confidence is not None:
                             st.write(f"{model_name} confidence: {confidence*100:.2f}%")
@@ -76,13 +76,13 @@ if st.button("Predict Sentiment"):
                     sentiment = result["sentiment"]
 
                     if sentiment.lower() == "positive":
-                        st.success(f"📈 Sentiment: {sentiment}")
+                        st.success(f" Sentiment: {sentiment}")
 
                     elif sentiment.lower() == "negative":
-                        st.error(f"📉 Sentiment: {sentiment}")
+                        st.error(f" Sentiment: {sentiment}")
 
                     else:
-                        st.info(f"😐 Sentiment: {sentiment}")
+                        st.info(f" Sentiment: {sentiment}")
 
                     # Show confidence if available (BiLSTM)
                     if "confidence" in result:

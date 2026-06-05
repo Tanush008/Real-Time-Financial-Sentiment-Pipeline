@@ -3,7 +3,6 @@ numpy
 matplotlib
 scipy
 scikit-learn
-huggingface-hub
 transformers
 NLTK
 spacy
@@ -15,3 +14,6 @@ uvicorn
 tensorflow
 keras
 pydantic
+kafka-python
+psycopg2-binary
+python-dotenv
