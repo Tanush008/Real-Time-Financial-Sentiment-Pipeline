@@ -1,7 +1,6 @@
 from kafka import KafkaConsumer
 import json
 import joblib
-import pickle
 import re
 import numpy as np
 import psycopg2
@@ -19,27 +18,25 @@ nltk.download('wordnet', quiet=True)
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
+
 def preprocess_text(text):
-    text  = re.sub(r'[^a-zA-Z\s]', '', text)
-    text  = text.lower()
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    text = text.lower()
     words = text.split()
     words = [lemmatizer.lemmatize(w) for w in words if w not in stop_words]
     return ' '.join(words)
 
+
 # ── Load SVM ─────────────────────────────────────────────────
-svm_model  = joblib.load('models/svm_model.pkl')
-tfidf      = joblib.load('models/tfidf_vectorizer.pkl')
+svm_model = joblib.load('models/svm_model.pkl')
+tfidf = joblib.load('models/tfidf_vectorizer.pkl')
 svm_labels = {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
 
 # ── Load BiLSTM ──────────────────────────────────────────────
-lstm_model = load_model('models/lstm_sentiment_model.h5')
+lstm_model = load_model('models/sentiment_model.h5')
 
-with open('models/lstm_tokenizer.pkl', 'rb') as f:
-    tokenizer = pickle.load(f)
-
-with open('models/lstm_label_encoder.pkl', 'rb') as f:
-    label_encoder = pickle.load(f)
-
+tokenizer = joblib.load('models/tokenizer.pkl')
+label_encoder = joblib.load('models/label_encoder.pkl')
 MAX_LENGTH = 100
 
 # ── PostgreSQL connection ─────────────────────────────────────
@@ -67,22 +64,26 @@ cursor.execute("""
 conn.commit()
 
 # ── Predict functions ─────────────────────────────────────────
+
+
 def predict_svm(text):
     cleaned = preprocess_text(text)
-    vec     = tfidf.transform([cleaned])
-    pred    = svm_model.predict(vec)
+    vec = tfidf.transform([cleaned])
+    pred = svm_model.predict(vec)
     return svm_labels[pred[0]]
 
+
 def predict_bilstm(text):
-    cleaned   = preprocess_text(text)
-    seq       = tokenizer.texts_to_sequences([cleaned])
-    padded    = pad_sequences(seq, maxlen=MAX_LENGTH,
-                              padding='post', truncating='post')
-    probs     = lstm_model.predict(padded, verbose=0)
+    cleaned = preprocess_text(text)
+    seq = tokenizer.texts_to_sequences([cleaned])
+    padded = pad_sequences(seq, maxlen=MAX_LENGTH,
+                           padding='post', truncating='post')
+    probs = lstm_model.predict(padded, verbose=0)
     label_idx = int(np.argmax(probs, axis=1)[0])
-    label     = label_encoder.inverse_transform([label_idx])[0]
+    label = label_encoder.inverse_transform([label_idx])[0]
     confidence = float(np.max(probs))
     return label, confidence
+
 
 # ── Kafka Consumer ────────────────────────────────────────────
 consumer = KafkaConsumer(
@@ -96,13 +97,13 @@ consumer = KafkaConsumer(
 print("Consumer started — waiting for messages...")
 
 for message in consumer:
-    data     = message.value
+    data = message.value
     headline = data.get('headline', '')
-    stock    = data.get('stock', 'UNKNOWN')
+    stock = data.get('stock', 'UNKNOWN')
 
-    svm_pred            = predict_svm(headline)
-    bilstm_pred, conf   = predict_bilstm(headline)
-    agree               = svm_pred.lower() == bilstm_pred.lower()
+    svm_pred = predict_svm(headline)
+    bilstm_pred, conf = predict_bilstm(headline)
+    agree = svm_pred.lower() == bilstm_pred.lower()
 
     # save to PostgreSQL
     cursor.execute("""
