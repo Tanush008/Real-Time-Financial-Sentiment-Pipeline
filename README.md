@@ -90,29 +90,31 @@ Full per-class precision/recall/F1 and confusion matrices are written to
 
 ```
 .
-├── app.py                  # Streamlit frontend -- loads models directly (standalone,
-│                           # no backend needed; also what Docker Compose runs)
-├── main.py                 # FastAPI app that exposes prediction endpoints
-├── svm_api.py               # SVM model loading, preprocessing, /predict/svm
-├── bilstm_api.py            # BiLSTM model loading, preprocessing, /predict/bilstm
-├── kafka_producer.py        # Fetches live headlines from NewsAPI, publishes to Kafka
-├── kafka_consumer.py        # Consumes headlines, predicts sentiment, stores in PostgreSQL
-├── eval.py                  # Evaluates SVM + BiLSTM on a shared test split, writes results/
-├── finbert_baseline.py      # Zero-shot FinBERT baseline, appends to results/
-├── docker-compose.yaml      # Full stack orchestration
-├── Dockerfile.api           # Container image for FastAPI backend and consumer
-├── Dockerfile.streamlit     # Container image for the Streamlit UI
+├── .env.example             # Template env vars (set NEWSAPI_KEY in .env for live headlines)
+├── app.py                   # Streamlit frontend (can run standalone; also used in Docker)
+├── main.py                  # FastAPI app exposing prediction endpoints
+├── svm_api.py               # SVM inference pipeline and /predict/svm endpoint logic
+├── bilstm_api.py            # BiLSTM inference pipeline and /predict/bilstm endpoint logic
+├── kafka_producer.py        # Pulls NewsAPI/sample headlines and publishes to Kafka
+├── kafka_producer_replay.py # Replays historical/sample headlines into Kafka
+├── kafka_consumer.py        # Consumes Kafka headlines, scores sentiment, writes PostgreSQL rows
+├── eval.py                  # Evaluates SVM/BiLSTM and writes reports to results/
+├── finbert_baseline.py      # Runs zero-shot FinBERT baseline and appends comparison metrics
+├── docker-compose.yaml      # Full local stack (Kafka, Postgres, API, Streamlit, Grafana)
+├── Dockerfile.api           # Image for FastAPI + consumer workloads
+├── Dockerfile.streamlit     # Image for Streamlit UI
 ├── requirements.txt         # Runtime dependencies
-├── requirements-dev.txt     # + pytest/httpx for running tests
+├── requirements-dev.txt     # Development/test dependencies
 ├── tests/
-│   └── test_api.py          # FastAPI endpoint tests (models mocked, no GPU/data needed)
-├── dataset/
-│   └── all-data.csv         # Training dataset (gitignored, see below)
-├── models/                  # Trained model artifacts (gitignored, see below)
+│   └── test_api.py          # API tests with mocked model/tokenizer objects
 ├── grafana/
 │   └── dashboard.json       # Grafana dashboard definition
-└── notebooks/
-    └── senti.ipynb          # Training/experimentation notebook
+├── notebooks/
+│   └── senti.ipynb          # Training and experimentation notebook
+└── results/
+    ├── eval_report.md       # Latest evaluation summary table and per-class metrics
+    ├── eval_results.json    # Machine-readable metrics
+    └── confusion_matrix_*.png # Confusion matrix plots for each model
 ```
 
 ## Requirements
