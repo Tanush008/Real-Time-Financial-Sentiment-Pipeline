@@ -73,9 +73,15 @@ that.
 
 | Model | Accuracy | Macro F1 | Weighted F1 | Avg Latency (ms/sample) |
 |-------|----------|----------|-------------|--------------------------|
-| SVM | _run eval.py_ | | | |
-| BiLSTM | _run eval.py_ | | | |
-| FinBERT (zero-shot) | _run finbert_baseline.py_ | | | |
+| SVM | 0.945 | 0.936 | 0.945 | 0.44 |
+| BiLSTM | 0.714 | 0.659 | 0.709 | 27.49 |
+| FinBERT (zero-shot) | 0.771 | 0.718 | 0.763 | 86.26 |
+
+### Benchmark takeaways
+
+- **Best overall quality:** SVM leads on Accuracy and F1 while also being the fastest model.
+- **Best semantic baseline:** FinBERT zero-shot outperforms BiLSTM on all aggregate metrics without task-specific fine-tuning.
+- **Latency tradeoff:** FinBERT has the highest per-sample latency, so it is best suited for offline comparison or lower-throughput workloads.
 
 Full per-class precision/recall/F1 and confusion matrices are written to
 `results/eval_report.md` and `results/confusion_matrix_*.png`.
