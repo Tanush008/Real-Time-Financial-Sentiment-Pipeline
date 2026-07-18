@@ -33,7 +33,7 @@ tfidf = joblib.load('models/tfidf_vectorizer.pkl')
 svm_labels = {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
 
 # ── Load BiLSTM ──────────────────────────────────────────────
-lstm_model = load_model('models/sentiment_model.h5')
+lstm_model = load_model('models/sentiment_model.keras')
 
 tokenizer = joblib.load('models/tokenizer.pkl')
 label_encoder = joblib.load('models/label_encoder.pkl')
@@ -89,7 +89,7 @@ def predict_bilstm(text):
 # ── Kafka Consumer ────────────────────────────────────────────
 consumer = KafkaConsumer(
     'headlines',
-    bootstrap_servers='kafka:9092',
+    bootstrap_servers='kafka:29092',
     value_deserializer=lambda v: json.loads(v.decode('utf-8')),
     auto_offset_reset='earliest',
     group_id='sentiment-group'

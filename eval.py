@@ -1,3 +1,26 @@
+"""
+Evaluation script for the Financial Sentiment Pipeline.
+
+Loads the same dataset used for training, rebuilds a single stratified
+train/test split (fixing the earlier bug where SVM and BiLSTM were each
+evaluated on a *different* split), reloads the saved models, and reports:
+
+  - Accuracy, macro-F1, weighted-F1 for both models
+  - Full sklearn classification_report (precision/recall/F1 per class)
+  - Confusion matrices (saved as PNGs)
+  - A markdown results table you can paste straight into the README / resume
+
+Run from the project root, after the models/ and dataset/ folders are
+populated (see README "Reproducing the models" section):
+
+    python eval.py
+
+Outputs go to results/:
+    results/eval_report.md
+    results/confusion_matrix_svm.png
+    results/confusion_matrix_bilstm.png
+"""
+
 import json
 import re
 import time
@@ -74,7 +97,7 @@ def evaluate_svm(X_test, y_test, label_names):
 
 
 def evaluate_bilstm(X_test, y_test, shared_label_encoder):
-    model = load_model("models/sentiment_model.h5")
+    model = load_model("models/sentiment_model.keras")
     tokenizer = joblib.load("models/tokenizer.pkl")
     # The saved BiLSTM label encoder may index classes in a different order
     # than the shared one used for the test split, so convert everything

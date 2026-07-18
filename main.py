@@ -62,10 +62,6 @@ def compare_predictions(data: News):
     }
 
 
-@app.get("/")
+@app.get("/health")
 def health():
-    return {"status": "ok", "endpoints": [
-        "/predict/svm",
-        "/predict/bilstm",
-        "/predict/compare"
-    ]}
+    return {"status": "ok"}

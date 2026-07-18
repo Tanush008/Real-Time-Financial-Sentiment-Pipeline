@@ -15,7 +15,7 @@ nltk.download('wordnet', quiet=True)
 router = APIRouter()
 
 
-model = load_model('models/sentiment_model.h5')
+model = load_model('models/sentiment_model.keras')
 
 
 tokenizer = joblib.load('models/tokenizer.pkl')

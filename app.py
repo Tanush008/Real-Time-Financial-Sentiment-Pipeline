@@ -1,3 +1,17 @@
+"""
+Streamlit UI for the Financial Sentiment Pipeline.
+
+This is a standalone app: it loads the SVM and BiLSTM models directly
+in-process, so it does NOT need the FastAPI backend (main.py) running.
+This is what makes it deployable as a free-tier live demo on Streamlit
+Community Cloud, and it's also what the `streamlit` service in
+docker-compose.yaml runs (with models/ mounted as a volume).
+
+If you want a request/response microservice architecture instead (UI ->
+FastAPI -> model), main.py + svm_api.py + bilstm_api.py already provide
+that as separate, callable endpoints -- this file just doesn't use them.
+"""
+
 import re
 
 import joblib
@@ -19,7 +33,7 @@ MAX_LENGTH = 100
 def load_models():
     svm_model = joblib.load("models/svm_model.pkl")
     tfidf = joblib.load("models/tfidf_vectorizer.pkl")
-    bilstm_model = load_model("models/sentiment_model.h5")
+    bilstm_model = load_model("models/sentiment_model.keras")
     tokenizer = joblib.load("models/tokenizer.pkl")
     label_encoder = joblib.load("models/label_encoder.pkl")
     return svm_model, tfidf, bilstm_model, tokenizer, label_encoder
