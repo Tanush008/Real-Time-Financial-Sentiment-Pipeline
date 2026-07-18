@@ -1,117 +1,137 @@
-# Finance Sentimental
+# Financial News Sentiment Pipeline
 
-Financial news sentiment analysis platform that compares two machine learning models, SVM and BiLSTM, to classify news headlines as Positive, Neutral, or Negative. The project includes:
+Real-time financial news sentiment analysis platform that benchmarks three
+approaches -- classical ML (SVM), a custom deep learning model (BiLSTM),
+and a domain-pretrained transformer (FinBERT) -- for classifying headlines
+as **Positive**, **Neutral**, or **Negative**. Predictions stream through
+Kafka into PostgreSQL and are visualized in Grafana.
 
-- A FastAPI backend that exposes prediction endpoints
-- A Streamlit frontend for interactive sentiment checks
-- A Kafka producer and consumer pipeline for streaming headline analysis
-- PostgreSQL storage for prediction history
-- Grafana for dashboarding the stored results
+**Live demo:** _[add your Streamlit Community Cloud link here after deploying -- see "Live Demo" below]_
 
-## Overview
+## Why three models
 
-The application is built around a simple workflow:
+SVM and BiLSTM were trained from scratch on the [Financial PhraseBank
+dataset](https://www.researchgate.net/publication/251231364_FinancialPhraseBank-v10).
+FinBERT is evaluated zero-shot (no fine-tuning) to answer a practical
+question: does a model already pretrained on financial text out-perform
+models trained from scratch on a few thousand labeled headlines? See
+[Results](#results) below.
 
-1. A financial headline is entered in the Streamlit UI or sent directly to the API.
-2. The FastAPI service preprocesses the text and runs it through two models:
-   - SVM using TF-IDF features
-   - BiLSTM using tokenized sequences
-3. The API returns the prediction, and the Streamlit app renders the result.
-4. In the streaming flow, the Kafka producer publishes headlines to the `headlines` topic.
-5. The Kafka consumer reads those messages, runs both models, and stores the output in PostgreSQL.
-6. Grafana can be connected to PostgreSQL to visualize trends in predictions over time.
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Input
+        UI[Streamlit UI]
+        NewsAPI[NewsAPI]
+    end
+
+    subgraph Serving
+        API[FastAPI]
+        SVM[SVM model]
+        BiLSTM[BiLSTM model]
+        API --> SVM
+        API --> BiLSTM
+    end
+
+    subgraph Streaming
+        Producer[Kafka Producer]
+        Topic[(Kafka topic: headlines)]
+        Consumer[Kafka Consumer]
+    end
+
+    DB[(PostgreSQL)]
+    Grafana[Grafana Dashboard]
+
+    UI -- POST /predict --> API
+    API -- prediction --> UI
+
+    NewsAPI --> Producer --> Topic --> Consumer
+    Consumer --> SVM
+    Consumer --> BiLSTM
+    Consumer --> DB
+    DB --> Grafana
+```
+
+**Request-response path:** UI or client hits FastAPI, which runs one or
+both models synchronously and returns a prediction.
+
+**Streaming path:** the producer pulls live headlines from NewsAPI (or
+falls back to sample data), publishes them to the `headlines` Kafka topic,
+the consumer scores each headline with both models and writes the result
+(headline, per-model prediction, confidence, agreement flag, timestamp) to
+PostgreSQL, and Grafana dashboards read from that table.
+
+## Results
+
+Run `python eval.py` after populating `models/` and `dataset/` (see
+[Reproducing the models](#reproducing-the-models)) to regenerate this
+table on an identical, stratified 80/20 test split for all models --
+earlier versions of this project evaluated SVM and BiLSTM on two
+*different* splits, which made the comparison invalid; `eval.py` fixes
+that.
+
+| Model | Accuracy | Macro F1 | Weighted F1 | Avg Latency (ms/sample) |
+|-------|----------|----------|-------------|--------------------------|
+| SVM | _run eval.py_ | | | |
+| BiLSTM | _run eval.py_ | | | |
+| FinBERT (zero-shot) | _run finbert_baseline.py_ | | | |
+
+Full per-class precision/recall/F1 and confusion matrices are written to
+`results/eval_report.md` and `results/confusion_matrix_*.png`.
 
 ## Project Structure
 
-```text
+```
 .
-├── app.py                  # Streamlit frontend
+├── app.py                  # Streamlit frontend (calls FastAPI backend)
+├── app_standalone.py       # Streamlit frontend with models loaded in-process
+│                           # (no backend needed -- used for the live demo)
 ├── main.py                 # FastAPI app that exposes prediction endpoints
-├── svm_api.py              # SVM model loading, preprocessing, and /predict/svm
-├── bilstm_api.py           # BiLSTM model loading, preprocessing, and /predict/bilstm
-├── kafka_producer.py       # Publishes sample headlines to Kafka
-├── kafka_consumer.py       # Consumes headlines, predicts sentiment, stores results in PostgreSQL
-├── docker-compose.yaml     # Full stack orchestration for app, Kafka, PostgreSQL, Streamlit, Grafana
-├── Dockerfile.api          # Container image for the FastAPI backend and consumer
-├── Dockerfile.streamlit    # Container image for the Streamlit UI
-├── requirements.txt        # Python dependencies
+├── svm_api.py               # SVM model loading, preprocessing, /predict/svm
+├── bilstm_api.py            # BiLSTM model loading, preprocessing, /predict/bilstm
+├── kafka_producer.py        # Fetches live headlines from NewsAPI, publishes to Kafka
+├── kafka_consumer.py        # Consumes headlines, predicts sentiment, stores in PostgreSQL
+├── eval.py                  # Evaluates SVM + BiLSTM on a shared test split, writes results/
+├── finbert_baseline.py      # Zero-shot FinBERT baseline, appends to results/
+├── docker-compose.yaml      # Full stack orchestration
+├── Dockerfile.api           # Container image for FastAPI backend and consumer
+├── Dockerfile.streamlit     # Container image for the Streamlit UI
+├── requirements.txt         # Runtime dependencies
+├── requirements-dev.txt     # + pytest/httpx for running tests
+├── tests/
+│   └── test_api.py          # FastAPI endpoint tests (models mocked, no GPU/data needed)
 ├── dataset/
-│   └── all-data.csv        # Training dataset used for model preparation
-├── models/
-│   ├── sentiment_model.h5   # Trained BiLSTM model
-│   ├── svm_model.pkl        # Trained SVM model
-│   ├── tfidf_vectorizer.pkl # TF-IDF vectorizer for SVM
-│   ├── tokenizer.pkl       # Tokenizer for BiLSTM
-│   └── label_encoder.pkl   # Label encoder used by BiLSTM
+│   └── all-data.csv         # Training dataset (gitignored, see below)
+├── models/                  # Trained model artifacts (gitignored, see below)
 ├── grafana/
 │   └── dashboard.json       # Grafana dashboard definition
 └── notebooks/
-    └── senti.ipynb          # Notebook used for experimentation/training
+    └── senti.ipynb          # Training/experimentation notebook
 ```
-
-## Components
-
-### FastAPI backend
-
-The backend lives in [main.py](main.py) and exposes these routes:
-
-- `GET /` - health check and endpoint list
-- `POST /predict/svm` - sentiment prediction using the SVM model
-- `POST /predict/bilstm` - sentiment prediction using the BiLSTM model
-- `POST /predict/compare` - runs both models and returns both results
-
-Each prediction request expects JSON like:
-
-```json
-{
-  "news": "Tesla stock rises after stronger-than-expected earnings"
-}
-```
-
-### Streamlit UI
-
-The UI in [app.py](app.py) provides a simple interface where users can:
-
-- choose SVM, BiLSTM, or Both
-- enter a financial headline
-- view sentiment output and confidence when available
-
-### Kafka pipeline
-
-- [kafka_producer.py](kafka_producer.py) publishes news headlines to the `headlines` topic.
-- [kafka_consumer.py](kafka_consumer.py) consumes those messages, predicts sentiment with both models, and writes the results to PostgreSQL.
-
-The consumer also creates the `predictions` table automatically if it does not already exist.
-
-### PostgreSQL
-
-The database stores a history of predictions with:
-
-- headline
-- stock symbol
-- SVM prediction
-- BiLSTM prediction
-- confidence
-- agreement flag
-- timestamp
-
-### Grafana
-
-Grafana is included in the compose stack so you can build dashboards on top of the PostgreSQL prediction table.
 
 ## Requirements
 
-- Python 3.10+ recommended
-- Docker and Docker Compose
-- Optional for local-only runs: a running Kafka broker and PostgreSQL instance
+- Python 3.10+
+- Docker and Docker Compose (for the full stack)
+- Optional: a [NewsAPI](https://newsapi.org/register) free-tier key, for real headlines instead of sample data
 
-## Recommended Way to Run
+## Reproducing the models
 
-This project is designed to run with Docker Compose because the API, consumer, Kafka, and PostgreSQL are wired together using container service names.
+`dataset/` and `models/` are gitignored (the trained artifacts are a few
+hundred MB combined). To reproduce them:
 
-### 1. Build and start the full stack
+1. Download the Financial PhraseBank dataset (`all-data.csv`) and place
+   it at `dataset/all-data.csv`.
+2. Run `notebooks/senti.ipynb` end to end. It saves `svm_model.pkl`,
+   `tfidf_vectorizer.pkl`, `sentiment_model.h5`, `tokenizer.pkl`, and
+   `label_encoder.pkl` -- move all five into `models/`.
+3. Run `python eval.py` to generate the metrics in [Results](#results).
+4. Optionally run `python finbert_baseline.py` for the transformer comparison.
 
-```bash
+## Running the full stack
+
+```
 docker compose up --build
 ```
 
@@ -123,75 +143,65 @@ This starts:
 - FastAPI on `localhost:8000`
 - Kafka consumer
 - Streamlit on `localhost:8501`
-- Grafana on `localhost:3000`
+- Grafana on `localhost:3000` (default login: `admin` / `admin`)
 
-### 2. Open the services
+To pull real headlines instead of the sample fallback, copy `.env.example`
+to `.env` and set `NEWSAPI_KEY`.
 
-- FastAPI health check: `http://127.0.0.1:8000/`
-- Streamlit app: `http://127.0.0.1:8501/`
-- Grafana: `http://127.0.0.1:3000/`
+## Running individual parts
 
-Grafana default login in this compose setup:
-
-- username: `admin`
-- password: `admin`
-
-## Running Individual Parts
-
-### FastAPI backend only
-
-If you want to run only the API locally:
-
-```bash
+**FastAPI backend only**
+```
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Streamlit UI only
-
-```bash
-pip install -r requirements.txt
+**Streamlit UI only** (talks to the API above)
+```
 streamlit run app.py
 ```
 
-### Kafka producer test
-
-Run this to publish sample headlines to Kafka:
-
-```bash
-python kafka_producer.py
+**Kafka producer** (publishes live or sample headlines)
+```
+python kafka_producer.py            # single pass
+python kafka_producer.py --loop 300 # repeat every 5 minutes
 ```
 
-### Kafka consumer
+**Kafka consumer** expects Kafka at `kafka:9092` and PostgreSQL at
+`postgres:5432` -- update `kafka_consumer.py` if running outside Docker.
 
-The consumer expects:
+## Live Demo
 
-- Kafka at `kafka:9092`
-- PostgreSQL at `postgres:5432`
+`app_standalone.py` loads both models directly (no FastAPI/Kafka/Postgres
+needed) and is deployable to [Streamlit Community Cloud](https://share.streamlit.io)
+for free:
 
-This is why the compose stack is the best way to run it. If you run it outside Docker, you will need to update the connection settings in [kafka_consumer.py](kafka_consumer.py) first.
+1. Commit or LFS-track the five files in `models/` so they're available
+   at deploy time.
+2. On share.streamlit.io, point a new app at `app_standalone.py`.
+3. Add the demo link at the top of this README.
+
+## Testing
+
+```
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+Tests mock the model/tokenizer objects, so they run without the trained
+artifacts present -- suitable for CI.
 
 ## API Examples
 
-### SVM prediction
-
-```bash
+```
 curl -X POST http://127.0.0.1:8000/predict/svm \
   -H "Content-Type: application/json" \
   -d '{"news":"Markets rally after strong earnings"}'
-```
 
-### BiLSTM prediction
-
-```bash
 curl -X POST http://127.0.0.1:8000/predict/bilstm \
   -H "Content-Type: application/json" \
   -d '{"news":"Company shares fall after weak guidance"}'
-```
 
-### Compare both models
-
-```bash
 curl -X POST http://127.0.0.1:8000/predict/compare \
   -H "Content-Type: application/json" \
   -d '{"news":"Tesla stock rises on record deliveries"}'
@@ -199,41 +209,25 @@ curl -X POST http://127.0.0.1:8000/predict/compare \
 
 ## Model Notes
 
-- The SVM model uses text cleaning, stopword removal, lemmatization, and TF-IDF features.
-- The BiLSTM model uses the same preprocessing, then tokenizes and pads the sequence to a maximum length of 100.
-- NLTK resources `stopwords` and `wordnet` are downloaded automatically in the model services and consumer.
+- SVM: TF-IDF features (1-2 grams, 10k vocab) + `LinearSVC`, tuned via `GridSearchCV`.
+- BiLSTM: tokenized/padded sequences (max length 100), class-weighted loss
+  to handle the dataset's class imbalance, early stopping on validation loss.
+- FinBERT: `ProsusAI/finbert`, evaluated zero-shot for comparison -- no
+  fine-tuning on this dataset.
+- All three share the same text cleaning: lowercase, strip non-alphabetic
+  characters, remove stopwords, lemmatize.
 
 ## Troubleshooting
 
-### 1. Model file not found
+**Model file not found** -- confirm `models/` has all five artifacts listed above.
 
-Make sure the `models/` directory contains all required artifacts:
+**Kafka connection errors** -- Kafka must be running before the producer/consumer.
 
-- `svm_model.pkl`
-- `tfidf_vectorizer.pkl`
-- `sentiment_model.h5`
-- `tokenizer.pkl`
-- `label_encoder.pkl`
+**PostgreSQL connection errors** -- the consumer expects PostgreSQL at
+hostname `postgres` under Docker Compose.
 
-### 2. Kafka connection errors
-
-Kafka must be running before starting the producer or consumer.
-
-### 3. PostgreSQL connection errors
-
-The consumer expects PostgreSQL to be available at the container hostname `postgres` when using Docker Compose.
-
-### 4. Streamlit cannot reach the API
-
-Confirm the FastAPI service is running on `http://127.0.0.1:8000`.
+**Streamlit cannot reach the API** -- confirm FastAPI is running on `http://127.0.0.1:8000`.
 
 ## Tech Stack
 
-- FastAPI
-- Streamlit
-- TensorFlow / Keras
-- Scikit-learn
-- NLTK
-- Kafka
-- PostgreSQL
-- Grafana
+FastAPI · Streamlit · TensorFlow/Keras · scikit-learn · Hugging Face Transformers (FinBERT) · NLTK · Kafka · PostgreSQL · Grafana · Docker Compose · pytest

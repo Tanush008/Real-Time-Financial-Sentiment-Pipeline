@@ -1,102 +1,113 @@
+"""
+Standalone version of the Streamlit UI that loads the SVM and BiLSTM
+models directly in-process instead of calling the FastAPI backend.
+
+Why this exists: the full stack (FastAPI + Kafka + PostgreSQL + Grafana)
+needs Docker Compose and isn't something a free hosting tier can run.
+This file has no such dependency, so it can be deployed as-is to
+Streamlit Community Cloud (share.streamlit.io) for a live public demo
+link -- useful for a resume/portfolio.
+
+Deploy steps:
+    1. Push this repo to GitHub (models/*.pkl and *.h5 must be committed
+       or pulled via Git LFS / a startup download step, since they're
+       gitignored by default -- see README "Live Demo" section).
+    2. On share.streamlit.io, create a new app pointing at this file
+       (app_standalone.py) as the entrypoint.
+    3. Done -- no server, Kafka, or Postgres required.
+"""
+
+import re
+
+import joblib
+import nltk
+import numpy as np
 import streamlit as st
-import requests
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# Page Config
-st.set_page_config(
-    page_title="Financial Sentiment Analysis",
-    page_icon="📈",
-    layout="centered"
-)
+nltk.download("stopwords", quiet=True)
+nltk.download("wordnet", quiet=True)
 
-# Title
+MAX_LENGTH = 100
+
+
+@st.cache_resource
+def load_models():
+    svm_model = joblib.load("models/svm_model.pkl")
+    tfidf = joblib.load("models/tfidf_vectorizer.pkl")
+    bilstm_model = load_model("models/sentiment_model.h5")
+    tokenizer = joblib.load("models/tokenizer.pkl")
+    label_encoder = joblib.load("models/label_encoder.pkl")
+    return svm_model, tfidf, bilstm_model, tokenizer, label_encoder
+
+
+stop_words = set(stopwords.words("english"))
+lemmatizer = WordNetLemmatizer()
+
+
+def preprocess_text(text: str) -> str:
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    text = text.lower()
+    words = text.split()
+    words = [lemmatizer.lemmatize(w) for w in words if w not in stop_words]
+    return " ".join(words)
+
+
+def predict_svm(text, svm_model, tfidf):
+    cleaned = preprocess_text(text)
+    vec = tfidf.transform([cleaned])
+    pred = svm_model.predict(vec)
+    return {0: "Negative", 1: "Neutral", 2: "Positive"}[pred[0]]
+
+
+def predict_bilstm(text, bilstm_model, tokenizer, label_encoder):
+    cleaned = preprocess_text(text)
+    seq = tokenizer.texts_to_sequences([cleaned])
+    padded = pad_sequences(seq, maxlen=MAX_LENGTH, padding="post", truncating="post")
+    probs = bilstm_model.predict(padded, verbose=0)
+    label_idx = int(np.argmax(probs, axis=1)[0])
+    label = label_encoder.inverse_transform([label_idx])[0]
+    confidence = float(np.max(probs))
+    return label, confidence
+
+
+st.set_page_config(page_title="Financial Sentiment Analysis", page_icon="📈", layout="centered")
 st.title("📈 Financial News Sentiment Analysis")
+st.caption("Standalone demo build -- SVM + BiLSTM run in-process, no backend server required.")
 
-st.write(
-    "Analyze financial news using SVM and BiLSTM models."
-)
+svm_model, tfidf, bilstm_model, tokenizer, label_encoder = load_models()
 
-# Model Selection
-model_choice = st.selectbox(
-    "Choose Model",
-    ["SVM", "BiLSTM", "Both"]
-)
-
-# News Input
+model_choice = st.selectbox("Choose Model", ["SVM", "BiLSTM", "Both"])
 news_input = st.text_area(
     "Enter Financial News",
     height=150,
-    placeholder="Example: Tesla stock surges after strong quarterly earnings"
+    placeholder="Example: Tesla stock surges after strong quarterly earnings",
 )
 
-# Predict Button
 if st.button("Predict Sentiment"):
-
     if news_input.strip() == "":
         st.warning("Please enter financial news.")
-
     else:
+        results = {}
+        if model_choice in ("SVM", "Both"):
+            results["SVM"] = {"sentiment": predict_svm(news_input, svm_model, tfidf)}
+        if model_choice in ("BiLSTM", "Both"):
+            label, conf = predict_bilstm(news_input, bilstm_model, tokenizer, label_encoder)
+            results["BiLSTM"] = {"sentiment": label, "confidence": conf}
 
-        # Select API endpoint
-        if model_choice == "SVM":
-            api_url = "http://127.0.0.1:8000/predict/svm"
-
-        elif model_choice == "BiLSTM":
-            api_url = "http://127.0.0.1:8000/predict/bilstm"
-
-        else:
-            api_url = "http://127.0.0.1:8000/predict/compare"
-
-        try:
-
-            response = requests.post(
-                api_url,
-                json={"news": news_input}
-            )
-
-            if response.status_code == 200:
-
-                result = response.json()
-
-                if model_choice == "Both":
-                    st.subheader("Comparison Results")
-                    for model_name, model_result in result.items():
-                        sentiment = model_result["sentiment"]
-                        confidence = model_result.get("confidence")
-
-                        if sentiment.lower() == "positive":
-                            st.success(f"{model_name}: 📈 {sentiment}")
-                        elif sentiment.lower() == "negative":
-                            st.error(f"{model_name}: 📉 {sentiment}")
-                        else:
-                            st.info(f"{model_name}:  {sentiment}")
-
-                        if confidence is not None:
-                            st.write(f"{model_name} confidence: {confidence*100:.2f}%")
-                else:
-                    sentiment = result["sentiment"]
-
-                    if sentiment.lower() == "positive":
-                        st.success(f" Sentiment: {sentiment}")
-
-                    elif sentiment.lower() == "negative":
-                        st.error(f" Sentiment: {sentiment}")
-
-                    else:
-                        st.info(f" Sentiment: {sentiment}")
-
-                    # Show confidence if available (BiLSTM)
-                    if "confidence" in result:
-                        st.write(
-                            f"Confidence: {result['confidence']*100:.2f}%"
-                        )
-
+        for model_name, result in results.items():
+            sentiment = result["sentiment"]
+            if sentiment.lower() == "positive":
+                st.success(f"{model_name}: 📈 {sentiment}")
+            elif sentiment.lower() == "negative":
+                st.error(f"{model_name}: 📉 {sentiment}")
             else:
-                st.error(
-                    f"Backend Error: {response.status_code}"
-                )
-
-        except Exception as e:
-            st.error(f"Connection Error: {e}")
+                st.info(f"{model_name}: {sentiment}")
+            if "confidence" in result:
+                st.write(f"{model_name} confidence: {result['confidence']*100:.2f}%")
 
 st.markdown("---")
-st.markdown("Built with Streamlit + FastAPI + SVM + BiLSTM")
+st.markdown("Built with Streamlit, scikit-learn (SVM) and TensorFlow/Keras (BiLSTM).")

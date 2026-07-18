@@ -4,7 +4,7 @@ matplotlib
 scipy
 scikit-learn
 transformers
-NLTK
+nltk
 spacy
 streamlit
 flask
@@ -17,3 +17,5 @@ pydantic
 kafka-python
 psycopg2-binary
 python-dotenv
+requests
+ipykernel

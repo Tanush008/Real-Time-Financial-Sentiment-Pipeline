@@ -58,7 +58,8 @@ cursor.execute("""
         bilstm_pred VARCHAR(20),
         confidence  FLOAT,
         agree       BOOLEAN,
-        timestamp   TIMESTAMP
+        event_time  TIMESTAMP,   -- when the headline was actually published (if known)
+        timestamp   TIMESTAMP    -- when this pipeline processed it
     )
 """)
 conn.commit()
@@ -101,6 +102,20 @@ for message in consumer:
     headline = data.get('headline', '')
     stock = data.get('stock', 'UNKNOWN')
 
+    # Historical replay messages carry the headline's real publish date;
+    # live/sample messages won't have this, so fall back to now().
+    event_time = None
+    raw_event_time = data.get('published_at')
+    if raw_event_time:
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+            try:
+                event_time = datetime.strptime(raw_event_time, fmt)
+                break
+            except ValueError:
+                continue
+    if event_time is None:
+        event_time = datetime.now()
+
     svm_pred = predict_svm(headline)
     bilstm_pred, conf = predict_bilstm(headline)
     agree = svm_pred.lower() == bilstm_pred.lower()
@@ -108,9 +123,9 @@ for message in consumer:
     # save to PostgreSQL
     cursor.execute("""
         INSERT INTO predictions
-            (headline, stock, svm_pred, bilstm_pred, confidence, agree, timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (headline, stock, svm_pred, bilstm_pred, conf, agree, datetime.now()))
+            (headline, stock, svm_pred, bilstm_pred, confidence, agree, event_time, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """, (headline, stock, svm_pred, bilstm_pred, conf, agree, event_time, datetime.now()))
     conn.commit()
 
     print(f"[{stock}] SVM: {svm_pred} | BiLSTM: {bilstm_pred} ({conf:.2%}) | Agree: {agree}")
