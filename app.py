@@ -1,22 +1,3 @@
-"""
-Standalone version of the Streamlit UI that loads the SVM and BiLSTM
-models directly in-process instead of calling the FastAPI backend.
-
-Why this exists: the full stack (FastAPI + Kafka + PostgreSQL + Grafana)
-needs Docker Compose and isn't something a free hosting tier can run.
-This file has no such dependency, so it can be deployed as-is to
-Streamlit Community Cloud (share.streamlit.io) for a live public demo
-link -- useful for a resume/portfolio.
-
-Deploy steps:
-    1. Push this repo to GitHub (models/*.pkl and *.h5 must be committed
-       or pulled via Git LFS / a startup download step, since they're
-       gitignored by default -- see README "Live Demo" section).
-    2. On share.streamlit.io, create a new app pointing at this file
-       (app_standalone.py) as the entrypoint.
-    3. Done -- no server, Kafka, or Postgres required.
-"""
-
 import re
 
 import joblib
@@ -76,7 +57,7 @@ def predict_bilstm(text, bilstm_model, tokenizer, label_encoder):
 
 st.set_page_config(page_title="Financial Sentiment Analysis", page_icon="📈", layout="centered")
 st.title("📈 Financial News Sentiment Analysis")
-st.caption("Standalone demo build -- SVM + BiLSTM run in-process, no backend server required.")
+st.write("Analyze financial news using SVM and BiLSTM models.")
 
 svm_model, tfidf, bilstm_model, tokenizer, label_encoder = load_models()
 

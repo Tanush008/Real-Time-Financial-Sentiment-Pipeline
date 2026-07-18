@@ -1,26 +1,3 @@
-"""
-Evaluation script for the Financial Sentiment Pipeline.
-
-Loads the same dataset used for training, rebuilds a single stratified
-train/test split (fixing the earlier bug where SVM and BiLSTM were each
-evaluated on a *different* split), reloads the saved models, and reports:
-
-  - Accuracy, macro-F1, weighted-F1 for both models
-  - Full sklearn classification_report (precision/recall/F1 per class)
-  - Confusion matrices (saved as PNGs)
-  - A markdown results table you can paste straight into the README / resume
-
-Run from the project root, after the models/ and dataset/ folders are
-populated (see README "Reproducing the models" section):
-
-    python eval.py
-
-Outputs go to results/:
-    results/eval_report.md
-    results/confusion_matrix_svm.png
-    results/confusion_matrix_bilstm.png
-"""
-
 import json
 import re
 import time

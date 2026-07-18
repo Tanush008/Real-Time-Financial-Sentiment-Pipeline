@@ -84,9 +84,8 @@ Full per-class precision/recall/F1 and confusion matrices are written to
 
 ```
 .
-├── app.py                  # Streamlit frontend (calls FastAPI backend)
-├── app_standalone.py       # Streamlit frontend with models loaded in-process
-│                           # (no backend needed -- used for the live demo)
+├── app.py                  # Streamlit frontend -- loads models directly (standalone,
+│                           # no backend needed; also what Docker Compose runs)
 ├── main.py                 # FastAPI app that exposes prediction endpoints
 ├── svm_api.py               # SVM model loading, preprocessing, /predict/svm
 ├── bilstm_api.py            # BiLSTM model loading, preprocessing, /predict/bilstm
@@ -172,13 +171,13 @@ python kafka_producer.py --loop 300 # repeat every 5 minutes
 
 ## Live Demo
 
-`app_standalone.py` loads both models directly (no FastAPI/Kafka/Postgres
-needed) and is deployable to [Streamlit Community Cloud](https://share.streamlit.io)
+`app.py` loads both models directly (no FastAPI/Kafka/Postgres needed) and
+is deployable to [Streamlit Community Cloud](https://share.streamlit.io)
 for free:
 
 1. Commit or LFS-track the five files in `models/` so they're available
    at deploy time.
-2. On share.streamlit.io, point a new app at `app_standalone.py`.
+2. On share.streamlit.io, point a new app at `app.py`.
 3. Add the demo link at the top of this README.
 
 ## Testing

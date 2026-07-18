@@ -1,28 +1,3 @@
-"""
-Streams headlines from a historical news CSV (e.g. a Benzinga-style dump
-with columns: id, headline, url, author, date, ticker) into the
-`headlines` Kafka topic, at a controlled rate -- so your Grafana dashboard
-fills up with a realistic volume of real headlines instead of a handful
-of live/sample ones, without hammering your CPU all at once.
-
-This does NOT train anything and does NOT require a GPU. It only reads
-the CSV in chunks and publishes messages; the actual model inference
-happens later in kafka_consumer.py, same as with kafka_producer.py.
-
-Usage:
-    # Stream the first 2,000 headlines, 5 per second (~7 minutes total)
-    python kafka_producer_replay.py --file dataset/historical_headlines.csv --limit 2000 --rate 5
-
-    # Stream everything at a slower, gentler rate
-    python kafka_producer_replay.py --file dataset/historical_headlines.csv --rate 2
-
-    # Only replay headlines for specific tickers
-    python kafka_producer_replay.py --file dataset/historical_headlines.csv --tickers A,AAPL,TSLA
-
-CSV is expected to have no header row and these columns in order:
-    id, headline, url, author, date, ticker
-If your file has a header row, add --has-header.
-"""
 
 import argparse
 import csv

@@ -1,19 +1,3 @@
-"""
-Transformer baseline: evaluates ProsusAI/finbert (a BERT model pretrained
-and fine-tuned specifically on financial text) on the SAME held-out test
-split used in eval.py, with zero additional training.
-
-This gives you a third comparison point beyond classical ML (SVM) and a
-custom deep learning model (BiLSTM) -- i.e. "does a domain-pretrained
-transformer beat models trained from scratch on this dataset?"
-
-Run after eval.py, from the project root:
-
-    python finbert_baseline.py
-
-Appends its results to results/eval_report.md and results/eval_results.json.
-"""
-
 import json
 import time
 from pathlib import Path

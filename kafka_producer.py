@@ -1,16 +1,3 @@
-"""
-Publishes financial headlines to the `headlines` Kafka topic.
-
-By default, pulls real, current headlines from NewsAPI's /v2/everything
-endpoint (free tier: https://newsapi.org/register). If NEWSAPI_KEY is not
-set, falls back to a small set of sample headlines so the pipeline still
-runs end-to-end without any external account.
-
-Usage:
-    python kafka_producer.py                 # single fetch-and-publish pass
-    python kafka_producer.py --loop 300       # repeat every 300 seconds
-"""
-
 import argparse
 import json
 import os
